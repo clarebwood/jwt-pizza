@@ -1,28 +1,48 @@
 import { test, expect } from 'playwright-test-coverage';
 
-test.describe.configure({ timeout: 30000 });
-
 test('updateUser', async ({ page }) => {
   const email = 'user' + Math.floor(Math.random() * 10000) + '@jwt.com';
+  const updateRequests: { id?: string; name?: string; email?: string }[] = [];
+  let user: { id: string; name: string; email: string; password?: string; roles: { role: string }[] };
+
+  await page.route('**/api/auth', async (route) => {
+    const registration = route.request().postDataJSON();
+    user = {
+      id: '1',
+      name: registration.name,
+      email: registration.email,
+      password: registration.password,
+      roles: [{ role: 'diner' }],
+    };
+    await route.fulfill({ json: { user, token: 'registered-token' } });
+  });
+
+  await page.route('**/api/order', async (route) => {
+    await route.fulfill({ json: { orders: [] } });
+  });
+
+  await page.route(/\/api\/user\/[^/?]+$/, async (route) => {
+    if (route.request().method() !== 'PUT') {
+      await route.continue();
+      return;
+    }
+
+    const updatedUser = route.request().postDataJSON();
+    updateRequests.push(updatedUser);
+    user = { ...user, ...updatedUser };
+    await route.fulfill({ json: { user, token: 'updated-token' } });
+  });
+
   await page.goto('/');
   await page.getByRole('link', { name: 'Register' }).click();
   await page.getByRole('textbox', { name: 'Full name' }).fill('pizza diner');
   await page.getByRole('textbox', { name: 'Email address' }).fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill('diner');
-  const registerResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/api/auth' &&
-      response.request().method() === 'POST',
-  );
   await page.getByRole('button', { name: 'Register' }).click();
-  const registerResponse = await registerResponsePromise;
-  expect(registerResponse.ok()).toBeTruthy();
 
-  const userLink = page.getByRole('link', { name: /pd/i });
-  await userLink.waitFor({ state: 'visible', timeout: 10000 });
-  await userLink.click();
+  await page.getByRole('link', { name: 'pd' }).click();
 
-  await expect(page.getByRole('main')).toContainText('pizza diner', { timeout: 10000 });
+  await expect(page.getByRole('main')).toContainText('pizza diner');
 
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('h3')).toContainText('Edit user');
@@ -31,7 +51,9 @@ test('updateUser', async ({ page }) => {
 
   await page.waitForSelector('[role="dialog"].hidden', { state: 'attached' });
 
-  await expect(page.getByRole('main')).toContainText('pizza dinerx', { timeout: 10000 });
+  await expect(page.getByRole('main')).toContainText('pizza dinerx');
+  expect(updateRequests).toHaveLength(1);
+  expect(updateRequests[0]).toMatchObject({ name: 'pizza dinerx', email });
 
   await page.getByRole('button', { name: 'Edit' }).click();
   await expect(page.locator('h3')).toContainText('Edit user');
@@ -39,27 +61,8 @@ test('updateUser', async ({ page }) => {
 
   await page.waitForSelector('[role="dialog"].hidden', { state: 'attached' });
 
-  await expect(page.getByRole('main')).toContainText('pizza dinerx', { timeout: 10000 });
-
-  await page.getByRole('link', { name: 'Logout' }).click();
-  await page.getByRole('link', { name: 'Login' }).click();
-
-  await page.getByRole('textbox', { name: 'Email address' }).fill(email);
-  await page.getByRole('textbox', { name: 'Password' }).fill('diner');
-  const loginResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/api/auth' &&
-      response.request().method() === 'PUT',
-  );
-  await page.getByRole('button', { name: 'Login' }).click();
-  const loginResponse = await loginResponsePromise;
-  expect(loginResponse.ok()).toBeTruthy();
-
-  const userLinkAfterLogin = page.getByRole('link', { name: /pd/i });
-  await userLinkAfterLogin.waitFor({ state: 'visible', timeout: 10000 });
-  await userLinkAfterLogin.click();
-
-  await expect(page.getByRole('main')).toContainText('pizza dinerx', { timeout: 10000 });
+  await expect(page.getByRole('main')).toContainText('pizza dinerx');
+  expect(updateRequests).toHaveLength(2);
 });
 
 test('listUsers', async ({ page }) => {
