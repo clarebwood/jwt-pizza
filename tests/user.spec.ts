@@ -1,7 +1,10 @@
 import { test, expect } from 'playwright-test-coverage';
 
+test.describe.configure({ timeout: 30000 });
+
 test('updateUser', async ({ page }) => {
   const email = 'user' + Math.floor(Math.random() * 10000) + '@jwt.com';
+  const userLink = page.getByRole('link', { name: 'pd' });
   await page.goto('/');
   await page.getByRole('link', { name: 'Register' }).click();
   await page.getByRole('textbox', { name: 'Full name' }).fill('pizza diner');
@@ -9,7 +12,8 @@ test('updateUser', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Password' }).fill('diner');
   await page.getByRole('button', { name: 'Register' }).click();
 
-  await page.getByRole('link', { name: 'pd' }).click();
+  await userLink.waitFor({ state: 'visible', timeout: 10000 });
+  await userLink.click();
 
   await expect(page.getByRole('main')).toContainText('pizza diner');
 
@@ -37,7 +41,8 @@ test('updateUser', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Password' }).fill('diner');
   await page.getByRole('button', { name: 'Login' }).click();
 
-  await page.getByRole('link', { name: 'pd' }).click();
+  await userLink.waitFor({ state: 'visible', timeout: 10000 });
+  await userLink.click();
 
   await expect(page.getByRole('main')).toContainText('pizza dinerx');
 });
